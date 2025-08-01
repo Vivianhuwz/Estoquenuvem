@@ -1,0 +1,2302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>库存销售管理系统</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- Google字体已移除以避免ORB错误，使用系统字体 -->
+  <!-- 添加XLSX库 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- 添加Chart.js库 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- 添加Chart.js datalabels插件 -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <!-- 添加Supabase客户端 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- 添加Supabase配置 -->
+  <script src="./config.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#5d9cec',
+            'light-blue': '#f0f8ff',
+            'card-bg': '#ffffff',
+            'hover-blue': '#4a89dc',
+            'pressed-blue': '#3a7bd5',
+          },
+          fontFamily: {
+            'microsoft': ['Microsoft YaHei', 'Arial', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  
+  <style>
+    body {
+      font-family: 'Microsoft YaHei', Arial, sans-serif;
+      background-color: #f0f8ff;
+      color: #2c3e50;
+    }
+    
+    /* 备份字体样式刷新 */
+    .fallback-font {
+      font-family: Arial, sans-serif;
+      color: #34495e;
+      background-color: #ecf0f1;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    
+    .nav-item {
+      transition: all 0.3s ease;
+    }
+    
+    .nav-item:hover {
+      background-color: #e6f2ff;
+      transform: translateX(5px);
+    }
+    
+    .nav-item.active {
+      background-color: white;
+      border-left: 4px solid #3a7bd5;
+    }
+    
+    /* 根据图标颜色设置对应的active状态颜色 */
+    #nav-inventory.active {
+      color: #3b82f6; /* blue-500 */
+      border-left-color: #3b82f6;
+    }
+    
+    #nav-purchase.active {
+      color: #10b981; /* green-500 */
+      border-left-color: #10b981;
+    }
+    
+    #nav-sales.active {
+      color: #f97316; /* orange-500 */
+      border-left-color: #f97316;
+    }
+    
+    #nav-lowstock.active {
+      color: #ef4444; /* red-500 */
+      border-left-color: #ef4444;
+    }
+    
+    #nav-analysis.active {
+      color: #8b5cf6; /* purple-500 */
+      border-left-color: #8b5cf6;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+    }
+    
+    .card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      transform: translateY(-2px);
+    }
+    
+    .btn-primary {
+      background-color: #5d9cec;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      font-weight: bold;
+      transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+      background-color: #4a89dc;
+    }
+    
+    .btn-primary:active {
+      background-color: #3a7bd5;
+    }
+    
+    .table-header {
+      background-color: #5d9cec;
+      color: white;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    
+    .table-row:hover {
+      background-color: #f5f5f5;
+    }
+    
+    .search-input {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 6px 12px;
+      background: white;
+    }
+    
+    .search-input:focus {
+      outline: none;
+      border-color: #5d9cec;
+      box-shadow: 0 0 0 2px rgba(93, 156, 236, 0.2);
+    }
+    
+    /* 下拉框样式 */
+    select.search-input {
+      background-image: none;
+      padding-right: 2rem;
+    }
+    
+    select.search-input::-ms-expand {
+      display: none;
+    }
+    
+    .stats-card {
+      background: linear-gradient(135deg, #5d9cec 0%, #4a89dc 100%);
+      color: white;
+    }
+  </style>
+</head>
+
+<body class="bg-light-blue text-gray-800 min-h-screen flex">
+  <!-- 左侧导航栏 -->
+  <aside class="w-64 bg-white shadow-lg min-h-screen flex flex-col">
+    <!-- Logo区域 -->
+    <div class="p-6 border-b border-gray-200">
+      <div class="flex items-center space-x-3">
+        <div class="w-12 h-12 rounded-lg bg-white flex items-center justify-center">
+          <i class="fa fa-cubes text-xl text-blue-500"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-semibold text-gray-800">库存销售管理系统</h1>
+          <p class="text-xs text-gray-500">Gestão de estoque</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 导航菜单 -->
+    <nav class="flex-1 p-4">
+      <ul class="space-y-2">
+        <!-- 库存信息 -->
+        <li>
+          <a href="#" onclick="showTab('inventory')" id="nav-inventory" class="nav-item active flex items-center px-4 py-3 text-sm font-medium rounded-lg">
+            <i class="fa fa-archive mr-3 text-lg text-blue-500"></i>
+            <span>库存信息</span>
+          </a>
+        </li>
+        
+        <!-- 采购记录 -->
+        <li>
+          <a href="#" onclick="showTab('purchase')" id="nav-purchase" class="nav-item flex items-center px-4 py-3 text-sm font-medium text-gray-600 rounded-lg">
+            <i class="fa fa-shopping-cart mr-3 text-lg text-green-500"></i>
+            <span>采购记录</span>
+          </a>
+        </li>
+        
+        <!-- 销售记录 -->
+        <li>
+          <a href="#" onclick="showTab('sales')" id="nav-sales" class="nav-item flex items-center px-4 py-3 text-sm font-medium text-gray-600 rounded-lg">
+            <i class="fa fa-line-chart mr-3 text-lg text-orange-500"></i>
+            <span>销售记录</span>
+          </a>
+        </li>
+        
+        <!-- 低库存 -->
+        <li>
+          <a href="#" onclick="showTab('lowstock')" id="nav-lowstock" class="nav-item flex items-center px-4 py-3 text-sm font-medium text-gray-600 rounded-lg">
+            <i class="fa fa-exclamation-triangle mr-3 text-lg text-red-500"></i>
+            <span>低库存</span>
+          </a>
+        </li>
+        
+        <!-- 数据分析 -->
+        <li>
+          <a href="#" onclick="showTab('analysis')" id="nav-analysis" class="nav-item flex items-center px-4 py-3 text-sm font-medium text-gray-600 rounded-lg">
+            <i class="fa fa-bar-chart mr-3 text-lg text-purple-500"></i>
+            <span>数据分析</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+    
+    <!-- 底部操作区域 -->
+    <div class="p-4 border-t border-gray-200">
+      <!-- 移除导入Excel按钮，已移至顶部工具栏 -->
+    </div>
+  </aside>
+
+  <!-- 右侧主要内容区域 -->
+  <div class="flex-1 flex flex-col">
+    <!-- 顶部工具栏 -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+      <div class="px-6">
+        <div class="flex items-center justify-between h-16">
+          <!-- 页面标题 -->
+          <div>
+            <h1 class="text-xl font-semibold text-gray-800" id="pageTitle">库存信息</h1>
+          </div>
+          
+          <!-- 搜索区域 -->
+          <div class="flex-1 flex justify-center mx-8">
+            <div class="flex space-x-3 w-96">
+              <!-- 产品搜索框 -->
+              <div class="relative flex-1">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <i class="fa fa-search text-gray-400"></i>
+                </div>
+                <input type="text" id="searchInput" placeholder="搜索产品..." 
+                  class="w-full pl-10 pr-10 py-2 search-input"
+                  oninput="searchProducts()">
+                <button id="clearSearchBtn" onclick="clearSearch()" 
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600" 
+                        style="display: none;">
+                  <i class="fa fa-times"></i>
+                </button>
+              </div>
+              
+              <!-- 类别筛选下拉框 -->
+              <div class="relative">
+                <select id="categoryFilter" class="search-input pr-8 appearance-none cursor-pointer" onchange="searchProducts()">
+                  <option value="">所有类别</option>
+                </select>
+                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <i class="fa fa-chevron-down text-gray-400 text-sm"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 文件上传区域 -->
+          <div class="flex items-center space-x-3">
+
+
+          </div>
+          
+          <!-- 操作按钮 -->
+          <div class="flex space-x-3 ml-6">
+            <button onclick="openUploadModal()" class="px-4 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors">
+              <i class="fa fa-upload mr-2"></i>导入Excel
+            </button>
+
+            <button onclick="refreshData()" class="px-4 py-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors">
+              <i class="fa fa-refresh mr-2"></i>刷新
+            </button>
+            
+            <!-- 存储管理按钮组 -->
+            <div class="flex items-center space-x-2 border-l border-gray-300 pl-3">
+              <!-- 同步状态显示 -->
+              <div class="flex items-center space-x-2">
+                <span id="syncStatus" class="text-sm text-gray-500">未同步</span>
+                <div id="syncIndicator" class="w-2 h-2 bg-gray-400 rounded-full"></div>
+              </div>
+              
+              <!-- 手动同步按钮 -->
+              <button onclick="manualSync()" id="syncBtn" class="px-3 py-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors text-sm">
+                <i class="fa fa-cloud mr-1"></i>同步
+              </button>
+              
+              <!-- 从云端加载按钮 -->
+              <button onclick="loadFromCloud()" id="loadBtn" class="px-3 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors text-sm">
+                <i class="fa fa-cloud-download mr-1"></i>加载
+              </button>
+              
+              <!-- 备份按钮 -->
+              <button onclick="exportBackup()" class="px-3 py-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors text-sm">
+                <i class="fa fa-save mr-1"></i>备份
+              </button>
+              
+              <!-- 恢复按钮 -->
+              <button onclick="openRestoreModal()" class="px-3 py-2 bg-yellow-100 text-yellow-600 rounded-lg hover:bg-yellow-200 transition-colors text-sm">
+                <i class="fa fa-undo mr-1"></i>恢复
+              </button>
+              
+              <!-- 清除数据按钮 -->
+              <button onclick="confirmClearData()" class="px-3 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors text-sm">
+                <i class="fa fa-trash mr-1"></i>清除
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 主要内容区域 -->
+    <main class="flex-1 px-6 py-6">
+      <!-- 统计面板 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- 总产品数 -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 mb-1">总产品数</p>
+              <p class="text-2xl font-bold text-gray-800" id="totalProducts">0</p>
+            </div>
+            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <i class="fa fa-cubes text-xl text-blue-600"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- 低库存警告 -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 mb-1">低库存警告</p>
+              <p class="text-2xl font-bold text-red-600" id="lowStockCount">0</p>
+            </div>
+            <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+              <i class="fa fa-exclamation-triangle text-xl text-red-600"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- 高库存警告 -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 mb-1">高库存警告</p>
+              <p class="text-2xl font-bold text-blue-600" id="highStockCount">0</p>
+            </div>
+            <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <i class="fa fa-arrow-up text-xl text-blue-600"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- 总库存箱数 -->
+        <div class="card p-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 mb-1">总库存箱数</p>
+              <p class="text-2xl font-bold text-green-600" id="totalStock">0</p>
+            </div>
+            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <i class="fa fa-archive text-xl text-green-600"></i>
+            </div>
+          </div>
+        </div>
+
+
+      </div>
+
+      <!-- 内容标签页 -->
+      <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <!-- 库存信息标签页 -->
+        <div id="inventory-tab" class="tab-content">
+          <div class="p-6 border-b border-gray-100">
+            <h2 class="text-xl font-semibold text-gray-800">库存信息</h2>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="table-header">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">产品名称</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">库存箱数</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">库存数量</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">进货箱数</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">已售箱数</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">出售数量</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">类别</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200" id="inventoryTableBody">
+                <!-- 数据将通过JavaScript动态加载 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 采购记录标签页 -->
+        <div id="purchase-tab" class="tab-content hidden">
+          <div class="p-6 border-b border-gray-100">
+            <h2 class="text-xl font-semibold text-gray-800">采购记录</h2>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="table-header">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">产品名称</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">进货箱数</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">总进货量</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">NF</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">货柜数量</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">货柜箱数</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">到货日期</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">类别</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200" id="purchaseTableBody">
+                <!-- 数据将通过JavaScript动态加载 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 销售记录标签页 -->
+        <div id="sales-tab" class="tab-content hidden">
+          <div class="p-6 border-b border-gray-100">
+            <h2 class="text-xl font-semibold text-gray-800">销售记录</h2>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="table-header">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">产品名称</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">已售箱数</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">出售数量</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">出售百分比</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">7天销售</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">30天销售</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">类别</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200" id="salesTableBody">
+                <!-- 数据将通过JavaScript动态加载 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 低库存标签页 -->
+        <div id="lowstock-tab" class="tab-content hidden">
+          <div class="p-6 border-b border-gray-100 flex justify-between items-center">
+            <div>
+              <h2 class="text-xl font-semibold text-gray-800">低库存警告</h2>
+              <p class="text-sm text-gray-500 mt-1">库存箱数低于5的产品</p>
+            </div>
+            <button onclick="exportLowStockData()" class="px-4 py-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors text-sm">
+              <i class="fa fa-file-excel-o mr-2"></i>导出Excel
+            </button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="table-header">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">产品名称</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">库存箱数</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">价格</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">7天销售</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">30天销售</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium uppercase">类别</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200" id="lowStockTableBody">
+                <!-- 数据将通过JavaScript动态加载 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 数据分析标签页 -->
+        <div id="analysis-tab" class="tab-content hidden">
+          <div class="p-6 border-b border-gray-100">
+            <h2 class="text-xl font-semibold text-gray-800">数据分析</h2>
+          </div>
+          <div class="p-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- 库存进销对比图 -->
+              <div class="card p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">库存进销对比</h3>
+                <div style="height: 300px; width: 100%;">  <!-- 添加固定高度的容器 -->
+                  <canvas id="inventoryComparisonChart"></canvas>
+                </div>
+              </div>
+              
+              <!-- 修改销售趋势图容器样式 -->
+              <div class="card p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">销售趋势</h3>
+                <div style="height: 300px; width: 100%;">  <!-- 添加固定高度的容器 -->
+                  <canvas id="salesChart"></canvas>
+                </div>
+              </div>
+              
+              <!-- 补货建议 -->
+              <div class="card p-6 lg:col-span-2">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">补货建议</h3>
+                <div class="overflow-x-auto">
+                  <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="table-header">
+                      <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase">产品名称</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase">库存箱数</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase">进货箱数</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase">库存数量</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase">已售箱数</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase">7天销售</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase">周转率</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase cursor-pointer hover:bg-blue-600 transition-colors duration-200" onclick="toggleSuggestionFilter()">
+                          <div class="flex items-center justify-between">
+                            <span>建议</span>
+                            <i class="fa fa-chevron-down text-xs ml-2" id="suggestionFilterIcon"></i>
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200" id="suggestionsTableBody">
+                      <!-- 数据将通过JavaScript动态加载 -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 文件上传模态框 -->
+  <div id="uploadModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-96">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">导入Excel文件</h3>
+      <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+        <i class="fa fa-upload text-4xl text-gray-400 mb-4"></i>
+        <p class="text-gray-600 mb-4">拖拽Excel文件到此处或点击选择文件</p>
+        <input type="file" id="fileInput" accept=".xlsx,.xls" class="hidden" onchange="handleFileUpload(event)">
+        <button onclick="document.getElementById('fileInput').click()" class="btn-primary rounded-lg">
+          选择文件
+        </button>
+      </div>
+      <div class="flex justify-end space-x-3 mt-6">
+        <button onclick="closeUploadModal()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
+          取消
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 全局变量
+    let inventoryData = [];
+    let currentTab = 'inventory';
+    let isOnline = navigator.onLine;
+    let lastSyncTime = null;
+    const STORAGE_KEY = 'inventoryManagementData';
+    const SYNC_INTERVAL = 5 * 60 * 1000; // 5分钟自动同步
+    
+    // Supabase配置 - 从config.js中获取
+    let SUPABASE_URL = null;
+    let SUPABASE_ANON_KEY = null;
+    let supabase = null;
+    
+    // 初始化Supabase客户端
+    async function initSupabase() {
+      // 从config.js获取配置
+      if (window.SUPABASE_CONFIG) {
+        SUPABASE_URL = window.SUPABASE_CONFIG.url;
+        SUPABASE_ANON_KEY = window.SUPABASE_CONFIG.anonKey;
+      }
+      
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY || SUPABASE_URL.includes('your-project-ref')) {
+        console.log('Supabase配置未设置，使用本地存储模式');
+        updateSyncStatus('warning', '本地存储模式');
+        return false;
+      }
+      
+      try {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('Supabase客户端初始化成功');
+        
+        // 检查并创建数据库表
+        await ensureTableExists();
+        
+        updateSyncStatus('success', 'Supabase连接成功');
+        return true;
+      } catch (error) {
+        console.log('Supabase连接失败，使用本地存储:', error.message);
+        updateSyncStatus('warning', '本地存储模式');
+        return false;
+      }
+    }
+    
+    // 确保数据库表存在
+    async function ensureTableExists() {
+      try {
+        // 尝试查询表，如果表不存在会返回错误
+        const { data, error } = await supabase
+          .from('inventory_data')
+          .select('id')
+          .limit(1);
+          
+        if (error && error.code === '42P01') {
+          // 表不存在，尝试创建（需要在Supabase控制台手动创建）
+          console.log('数据库表不存在，请在Supabase控制台创建inventory_data表');
+          updateSyncStatus('warning', '需要创建数据库表');
+        } else if (error) {
+          console.log('数据库连接测试失败:', error.message);
+        } else {
+          console.log('数据库表检查通过');
+        }
+      } catch (error) {
+        console.log('数据库表检查失败:', error.message);
+      }
+    }
+    
+    // 标签页切换
+    function showTab(tabName) {
+      // 隐藏所有标签页
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.add('hidden');
+      });
+      
+      // 显示选中的标签页
+      document.getElementById(tabName + '-tab').classList.remove('hidden');
+      
+      // 更新导航状态
+      document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+        item.classList.add('text-gray-600');
+      });
+      
+      document.getElementById('nav-' + tabName).classList.add('active');
+      document.getElementById('nav-' + tabName).classList.remove('text-gray-600');
+      
+      // 更新页面标题
+      const titles = {
+        'inventory': { title: '库存信息', subtitle: '管理您的库存数据' },
+        'purchase': { title: '采购记录', subtitle: '查看采购历史记录' },
+        'sales': { title: '销售记录', subtitle: '分析销售数据' },
+        'lowstock': { title: '低库存警告', subtitle: '库存箱数低于5的产品' },
+        'analysis': { title: '数据分析', subtitle: '深度数据分析和报告' }
+      };
+      
+      document.getElementById('pageTitle').textContent = titles[tabName].title;
+      
+      currentTab = tabName;
+    }
+    
+    // 加载Excel文件
+    function loadExcelFile() {
+      // 这个函数现在为空，或者可以删除
+    }
+    
+    // 打开上传模态框
+    function openUploadModal() {
+      const modal = document.getElementById('uploadModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+      } else {
+        console.error('找不到uploadModal元素');
+      }
+    }
+    
+    // 关闭上传模态框
+    function closeUploadModal() {
+      const modal = document.getElementById('uploadModal');
+      const fileInput = document.getElementById('fileInput');
+      
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+      
+      if (fileInput) {
+        fileInput.value = '';
+      }
+    }
+
+    // 将函数暴露到全局作用域
+    window.openUploadModal = openUploadModal;
+    window.closeUploadModal = closeUploadModal;
+    
+    // 处理文件上传
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        // 检查XLSX库是否加载
+        if (typeof XLSX === 'undefined') {
+          alert('Excel处理库未加载，请刷新页面重试。如果问题持续存在，请检查网络连接。');
+          return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            
+            inventoryData = jsonData;
+            updateAllTables();
+            updateStatistics();
+            saveToLocalStorage(); // 保存数据到本地存储
+            closeUploadModal();
+            
+            alert('Excel文件导入成功！');
+          } catch (error) {
+            console.error('Excel文件处理错误:', error);
+            alert('文件解析失败，请确保文件格式正确。错误详情: ' + error.message);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    }
+    
+    // 更新所有表格
+    function updateAllTables() {
+      updateInventoryTable();
+      updatePurchaseTable();
+      updateSalesTable();
+      updateLowStockTable();
+      updateAnalysisTable();
+    }
+    
+    // 更新库存表格
+    function updateInventoryTable() {
+      const tbody = document.getElementById('inventoryTableBody');
+      tbody.innerHTML = '';
+      
+      inventoryData.forEach(item => {
+        const stockCount = item['库存箱数'] || 0;
+        const isLowStock = stockCount < 3;
+        const stockColorClass = isLowStock ? 'text-red-600 font-bold' : 'text-gray-800';
+        const productNameClass = isLowStock ? 'px-6 py-4 text-sm text-gray-800' : 'px-6 py-4 text-sm text-gray-800';
+        const productNameStyle = isLowStock ? 'display: inline-block; padding: 2px 8px; background-color: #fce7f3; color: #dc2626; font-weight: bold; border-radius: 6px;' : '';
+        
+        // 计算库存数量（库存箱数 × 装箱数）
+        const packingQty = item['装箱数'] || 1;
+        const stockQuantity = stockCount * packingQty;
+        
+        const row = document.createElement('tr');
+        row.className = 'table-row';
+        row.innerHTML = `
+          <td class="${productNameClass}"><span style="${productNameStyle}">${item['Apelido Produto'] || ''}</span></td>
+          <td class="px-6 py-4 text-sm ${stockColorClass}">${stockCount}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${stockQuantity}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${item['进货箱数'] || 0}</td>
+          <td class="px-6 py-4 text-sm text-gray-800 font-bold">${item['已售箱数'] || 0}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${item['出售数量'] || 0}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${item['类别'] || '产品'}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+    
+    // 更新采购表格
+    // 更新采购表格 - 参考Python版本的复杂逻辑
+    function updatePurchaseTable() {
+      const tbody = document.getElementById('purchaseTableBody');
+      tbody.innerHTML = '';
+      
+      inventoryData.forEach(item => {
+        const product = item['Apelido Produto'] || '';
+        const packingQty = item['装箱数'] || 1;
+        const category = item['类别'] || item['Category'] || item['Categoria'] || item['CATEGORIA'] || item['产品类别'] || item['产品分类'] || '产品';
+        
+        // 检查是否有进货量数据
+        const purchaseQty = item['进货量'] || 0;
+        if (purchaseQty <= 0) return;
+        
+        // 处理多个NF、货柜数量、到货日期的情况
+        const nfField = item['NF'] || '';
+        if (nfField && typeof nfField === 'string' && nfField.includes(',')) {
+          // 拆分多个记录
+          const nfValues = nfField.split(',').map(v => v.trim());
+          const containerValues = (item['各个货柜数量'] || '').toString().split(',').map(v => v.trim());
+          const dateValues = (item['到货日期'] || '').toString().split(',').map(v => v.trim());
+          
+          const maxLen = Math.max(nfValues.length, containerValues.length, dateValues.length);
+          
+          for (let i = 0; i < maxLen; i++) {
+            const nf = i < nfValues.length ? nfValues[i] : '';
+            const container = i < containerValues.length ? containerValues[i] : '';
+            const date = i < dateValues.length ? dateValues[i] : '';
+            
+            // 计算货柜箱数
+            let containerBoxes = 0;
+            try {
+              if (container && packingQty > 0) {
+                containerBoxes = Math.floor(parseFloat(container) / packingQty);
+              }
+            } catch (e) {
+              containerBoxes = 0;
+            }
+            
+            const stock = item['库存箱数'] || 0;
+            const productNameStyle = stock < 5 ? 
+              `<span style="display: inline-block; padding: 2px 8px; background-color: #fce7f3; color: #dc2626; font-weight: bold; border-radius: 6px;">${product}</span>` : 
+              product;
+            
+            const row = document.createElement('tr');
+            row.className = 'table-row';
+            row.innerHTML = `
+              <td class="px-6 py-4 text-sm text-gray-800">${productNameStyle}</td>
+              <td class="px-6 py-4 text-sm text-gray-800">${((item['进货箱数'] || 0) / maxLen).toFixed(1)}</td>
+              <td class="px-6 py-4 text-sm text-gray-800">${item['总进货量'] || 0}</td>
+              <td class="px-6 py-4 text-sm text-gray-800">${nf}</td>
+              <td class="px-6 py-4 text-sm text-gray-800">${container}</td>
+              <td class="px-6 py-4 text-sm text-gray-800">${containerBoxes}</td>
+              <td class="px-6 py-4 text-sm text-gray-800">${date}</td>
+              <td class="px-6 py-4 text-sm text-gray-800">${category}</td>
+            `;
+            tbody.appendChild(row);
+          }
+        } else {
+          // 单个记录的情况
+          const container = item['各个货柜数量'] || '';
+          let containerBoxes = 0;
+          try {
+            if (container && packingQty > 0) {
+              containerBoxes = parseFloat(container) / packingQty;
+            }
+          } catch (e) {
+            containerBoxes = 0;
+          }
+          
+          const stock = item['库存箱数'] || 0;
+          const productNameStyle = stock < 5 ? 
+            `<span style="display: inline-block; padding: 2px 8px; background-color: #fce7f3; color: #dc2626; font-weight: bold; border-radius: 6px;">${product}</span>` : 
+            product;
+          
+          const row = document.createElement('tr');
+          row.className = 'table-row';
+          row.innerHTML = `
+            <td class="px-6 py-4 text-sm text-gray-800">${productNameStyle}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${item['进货箱数'] || 0}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${item['总进货量'] || 0}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${nfField}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${container}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${containerBoxes.toFixed(1)}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${item['到货日期'] || ''}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${category}</td>
+          `;
+          tbody.appendChild(row);
+        }
+      });
+    }
+    
+    // 更新销售表格
+    function updateSalesTable() {
+      const tbody = document.getElementById('salesTableBody');
+      tbody.innerHTML = '';
+      
+      inventoryData.forEach(item => {
+        if (item['出售数量'] > 0) {
+          const row = document.createElement('tr');
+          row.className = 'table-row';
+          row.innerHTML = `
+            <td class="px-6 py-4 text-sm text-gray-800">${item['Apelido Produto'] || ''}</td>
+            <td class="px-6 py-4 text-sm text-gray-800 font-bold">${item['已售箱数'] || 0}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${item['出售数量'] || 0}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${item['%出售'] || '0%'}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${item['Vendas 7 dias'] || 0}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${item['Vendas 30 dias'] || 0}</td>
+            <td class="px-6 py-4 text-sm text-gray-800">${item['类别'] || '产品'}</td>
+          `;
+          tbody.appendChild(row);
+        }
+      });
+    }
+    
+
+    
+    // 更新低库存表格
+    function updateLowStockTable() {
+      const tbody = document.getElementById('lowStockTableBody');
+      tbody.innerHTML = '';
+      
+      // 筛选库存箱数小于5的产品
+      const lowStockItems = inventoryData.filter(item => (item['库存箱数'] || 0) < 5);
+      
+      lowStockItems.forEach(item => {
+        const stock = item['库存箱数'] || 0;
+        const sales7d = item['Vendas 7 dias'] || 0;
+        const sales30d = item['Vendas 30 dias'] || 0;
+        
+        const row = document.createElement('tr');
+        row.className = 'table-row';
+        row.innerHTML = `
+          <td class="px-6 py-4 text-sm text-gray-800">
+            <span style="display: inline-block; padding: 2px 8px; background-color: #ffffff; color: #000000; border-radius: 6px;">${item['Apelido Produto'] || ''}</span>
+          </td>
+          <td class="px-6 py-4 text-sm text-red-600 font-bold">${stock}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${item['Preco'] || 0}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${sales7d}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${sales30d}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${item['类别'] || '产品'}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+    
+    // 更新统计数据
+    function updateStatistics() {
+      const totalProducts = inventoryData.length;
+      const lowStockCount = inventoryData.filter(item => (item['库存箱数'] || 0) < 5).length;
+      const highStockCount = inventoryData.filter(item => (item['库存箱数'] || 0) > 20).length;
+      const totalStock = inventoryData.reduce((sum, item) => sum + (item['库存箱数'] || 0), 0);
+      
+      document.getElementById('totalProducts').textContent = totalProducts;
+      document.getElementById('lowStockCount').textContent = lowStockCount;
+      document.getElementById('highStockCount').textContent = highStockCount;
+      document.getElementById('totalStock').textContent = totalStock;
+    }
+    
+    // 更新类别下拉选项
+    function updateCategoryOptions() {
+      const categorySelect = document.getElementById('categoryFilter');
+      const categories = new Set();
+      
+      // 收集所有类别
+      inventoryData.forEach(item => {
+        const category = item['类别'] || item['Category'] || item['Categoria'] || item['CATEGORIA'] || item['产品类别'] || item['产品分类'] || '产品';
+        if (category && category.trim()) {
+          categories.add(category.trim());
+        }
+      });
+      
+      // 清空现有选项（保留"所有类别"）
+      categorySelect.innerHTML = '<option value="">所有类别</option>';
+      
+      // 添加类别选项
+      Array.from(categories).sort().forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        categorySelect.appendChild(option);
+      });
+    }
+    
+    // 搜索产品（修改后的版本）
+    function searchProducts() {
+      const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+      const selectedCategory = document.getElementById('categoryFilter').value;
+      const rows = document.querySelectorAll('.table-row');
+      
+      // 显示/隐藏清除按钮
+      const clearBtn = document.getElementById('clearSearchBtn');
+      if (searchTerm || selectedCategory) {
+        clearBtn.style.display = 'flex';
+      } else {
+        clearBtn.style.display = 'none';
+      }
+      
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length === 0) return;
+        
+        const productName = cells[0].textContent.toLowerCase();
+        const categoryCell = cells[cells.length - 1]; // 类别通常在最后一列
+        const category = categoryCell ? categoryCell.textContent.trim() : '';
+        
+        // 检查产品名称匹配
+        const nameMatches = !searchTerm || productName.includes(searchTerm);
+        
+        // 检查类别匹配
+        const categoryMatches = !selectedCategory || category === selectedCategory;
+        
+        // 显示或隐藏行
+        if (nameMatches && categoryMatches) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      
+      // 更新图表，传递搜索词
+      const originalSearchTerm = document.getElementById('searchInput').value;
+      updateCharts(originalSearchTerm || null);
+    }
+    
+    // 清除搜索
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('categoryFilter').value = '';
+      document.getElementById('clearSearchBtn').style.display = 'none';
+      
+      // 显示所有行
+      const rows = document.querySelectorAll('.table-row');
+      rows.forEach(row => {
+        row.style.display = '';
+      });
+      
+      // 更新图表，不传递任何过滤条件
+      updateCharts(null);
+    }
+    
+
+    
+    // 获取销售趋势数据
+    function getSalesTrend() {
+      const sales7d = inventoryData.reduce((sum, item) => sum + (item['Vendas 7 dias'] || 0), 0);
+      const sales30d = inventoryData.reduce((sum, item) => sum + (item['Vendas 30 dias'] || 0), 0);
+      const weeklyAvg = sales30d / 4;
+      
+      return {
+        '7天销售': sales7d,
+        '周平均': weeklyAvg,
+        '30天销售': sales30d
+      };
+    }
+    
+    // 获取库存进销对比数据
+    function getInventoryComparisonData(productFilter = null) {
+      // 根据产品名称筛选数据
+      let filteredData = inventoryData;
+      if (productFilter) {
+        filteredData = inventoryData.filter(item => {
+          const productName = item['Apelido Produto'] || '';
+          return productName.toLowerCase().includes(productFilter.toLowerCase());
+        });
+      }
+      
+      // 始终按产品型号分组
+      const groupData = {};
+      
+      filteredData.forEach(item => {
+        // 使用产品型号作为分组键
+        const groupKey = item['Apelido Produto'] || '未知产品';
+        
+        // 如果是第一次遇到这个产品型号，初始化数据
+        if (!groupData[groupKey]) {
+          groupData[groupKey] = {
+            '仓库箱数': 0,
+            '进货箱数': 0,
+            '已售箱数': 0
+          };
+        }
+        
+        // 累加数据
+        groupData[groupKey]['仓库箱数'] += (item['库存箱数'] || 0);
+        groupData[groupKey]['进货箱数'] += (item['进货箱数'] || 0);
+        groupData[groupKey]['已售箱数'] += (item['已售箱数'] || 0);
+      });
+      
+      return groupData;
+    }
+    
+    // 更新图表
+    function updateCharts(productFilter = null) {
+      // 销售趋势柱状图
+      const salesTrend = getSalesTrend();
+      const salesCtx = document.getElementById('salesChart');
+      
+      if (window.salesChart instanceof Chart) {
+        window.salesChart.destroy();
+      }
+      
+      window.salesChart = new Chart(salesCtx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(salesTrend),
+          datasets: [{
+            label: '销售量',
+            data: Object.values(salesTrend),
+            backgroundColor: '#5d9cec',
+            borderColor: '#4a89dc',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,  // 修改为true
+          plugins: {
+            legend: {
+              display: false
+            },
+            title: {
+              display: true,
+              text: '销售趋势分析'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '销售量'
+              }
+            }
+          }
+        }
+      });
+      
+      // 库存进销对比图表
+      const comparisonData = getInventoryComparisonData(productFilter);
+      const comparisonCtx = document.getElementById('inventoryComparisonChart');
+      
+      if (window.inventoryComparisonChart instanceof Chart) {
+        window.inventoryComparisonChart.destroy();
+      }
+      
+      // 准备图表数据
+      const categories = Object.keys(comparisonData);
+      const stockData = [];
+      const purchaseData = [];
+      const soldData = [];
+      
+      categories.forEach(category => {
+        stockData.push(comparisonData[category]['仓库箱数']);
+        purchaseData.push(comparisonData[category]['进货箱数']);
+        soldData.push(comparisonData[category]['已售箱数']);
+      });
+      
+      window.inventoryComparisonChart = new Chart(comparisonCtx, {
+        type: 'bar',
+        plugins: [ChartDataLabels],
+        data: {
+          labels: categories,
+          datasets: [
+            {
+              label: '仓库箱数',
+              data: stockData,
+              backgroundColor: '#4ecdc4',
+              borderColor: '#2ecc71',
+              borderWidth: 1,
+              stack: 'stack1'
+            },
+            {
+              label: '进货箱数',
+              data: purchaseData,
+              backgroundColor: '#5d9cec',
+              borderColor: '#4a89dc',
+              borderWidth: 1,
+              stack: 'stack1'
+            },
+            {
+              label: '已售箱数',
+              data: soldData,
+              backgroundColor: '#ff69b4',
+              borderColor: '#e91e63',
+              borderWidth: 1,
+              stack: 'stack1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          plugins: {
+            legend: {
+              position: 'top'
+            },
+            title: {
+              display: false
+            },
+            datalabels: {
+              display: true,
+              color: 'white',
+              font: {
+                weight: 'bold',
+                size: 12
+              },
+              formatter: function(value, context) {
+                return value > 0 ? value : '';
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              stacked: true,
+              title: {
+                display: true,
+                text: '箱数'
+              }
+            },
+            x: {
+              stacked: true,
+              title: {
+                display: false
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // 更新分析表格（补货建议）
+    function updateAnalysisTable() {
+      const tbody = document.getElementById('suggestionsTableBody');
+      tbody.innerHTML = '';
+      
+      inventoryData.forEach(item => {
+        const stock = item['库存箱数'] || 0;
+        const sales7d = item['Vendas 7 dias'] || 0;
+        let turnover = 0;
+        
+        if (stock > 0) {
+          turnover = sales7d / stock;
+        }
+        
+        let suggestion = '库存正常';
+        let suggestionClass = 'bg-green-100 text-green-600';
+        
+        // 修改建议逻辑：先判断库存是否过多，再判断是否需要补货
+        if (stock < 5) {
+          // 库存低于5箱，无论销售如何都建议紧急补货
+          suggestion = '紧急补货';
+          suggestionClass = 'bg-red-100 text-red-600';
+        } else if (stock > 30 && turnover < 0.1) {
+          // 库存超过30箱且周转率低于0.1，判定为库存过多
+          suggestion = '库存过多';
+          suggestionClass = 'bg-blue-100 text-blue-600';
+        } else if (turnover > 0.5) {
+          // 周转率高于0.5，建议补货
+          suggestion = '建议补货';
+          suggestionClass = 'bg-yellow-100 text-yellow-600';
+        }
+        
+        // 设置产品名称样式：库存箱数低于3时显示粉色底红色字
+        const productNameStyle = stock < 3 ? 
+          `<span style="display: inline-block; padding: 2px 8px; background-color: #fce7f3; color: #dc2626; font-weight: bold; border-radius: 6px;">${item['Apelido Produto'] || ''}</span>` : 
+          (item['Apelido Produto'] || '');
+        
+        // 计算库存数量（库存箱数 × 装箱数）- 与库存信息表格保持一致
+        const packingQty = item['装箱数'] || 1;
+        const stockQuantity = stock * packingQty;
+        
+        const row = document.createElement('tr');
+        row.className = 'table-row';
+        row.innerHTML = `
+          <td class="px-6 py-4 text-sm text-gray-800">${productNameStyle}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${stock}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${item['进货箱数'] || 0}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${stockQuantity}</td>
+          <td class="px-6 py-4 text-sm text-gray-800 font-bold">${item['已售箱数'] || 0}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${sales7d}</td>
+          <td class="px-6 py-4 text-sm text-gray-800">${turnover.toFixed(2)}</td>
+          <td class="px-6 py-4 text-sm">
+            <span class="px-2 py-1 text-xs rounded-full ${suggestionClass}">${suggestion}</span>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+    
+    // 更新所有表格（修改后的版本）
+    function updateAllTables() {
+      updateInventoryTable();
+      updatePurchaseTable();
+      updateSalesTable();
+      updateLowStockTable();
+      updateAnalysisTable();
+      updateCategoryOptions();
+      updateCharts(); // 添加图表更新
+    }
+    
+    // 导出数据
+    function exportData() {
+      if (inventoryData.length === 0) {
+        alert('没有数据可导出');
+        return;
+      }
+      
+      const ws = XLSX.utils.json_to_sheet(inventoryData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '库存数据');
+      XLSX.writeFile(wb, '库存管理数据.xlsx');
+    }
+    
+    // 导出低库存数据
+    function exportLowStockData() {
+      // 筛选库存箱数小于5的产品
+      const lowStockItems = inventoryData.filter(item => (item['库存箱数'] || 0) < 5);
+      
+      if (lowStockItems.length === 0) {
+        alert('没有低库存产品可导出');
+        return;
+      }
+      
+      // 准备导出数据，使用中文列名
+      const exportData = lowStockItems.map(item => ({
+        '产品名称': item['Apelido Produto'] || '',
+        '库存箱数': item['库存箱数'] || 0,
+        '价格': item['Preco'] || 0,
+        '7天销售': item['Vendas 7 dias'] || 0,
+        '30天销售': item['Vendas 30 dias'] || 0,
+        '类别': item['类别'] || '产品',
+        '进货箱数': item['进货箱数'] || 0,
+        '已售箱数': item['已售箱数'] || 0,
+        '出售数量': item['出售数量'] || 0,
+        '余额': item['(=) Saldo Final'] || 0
+      }));
+      
+      // 创建工作表
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '低库存警告');
+      
+      // 生成文件名（包含当前日期）
+      const now = new Date();
+      const dateStr = now.getFullYear() + '-' + 
+                     String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+                     String(now.getDate()).padStart(2, '0');
+      const fileName = `低库存警告_${dateStr}.xlsx`;
+      
+      // 导出文件
+      XLSX.writeFile(wb, fileName);
+      
+      alert(`低库存数据导出成功！\n文件名：${fileName}\n共导出 ${lowStockItems.length} 个低库存产品`);
+    }
+    
+    // 刷新数据
+    function refreshData() {
+      updateAllTables();
+      updateStatistics();
+      alert('数据已刷新');
+    }
+    
+    // 数据存储相关常量和变量
+    const CLOUD_API_URL = 'https://api.example.com/inventory'; // 替换为实际的云端API
+    let autoSaveInterval = null;
+
+    // 监听网络状态变化
+    window.addEventListener('online', () => {
+      isOnline = true;
+      updateSyncStatus('网络已连接，正在同步...', 'syncing');
+      syncWithCloud();
+    });
+
+    window.addEventListener('offline', () => {
+      isOnline = false;
+      updateSyncStatus('离线模式，使用本地数据', 'warning');
+      console.log('网络断开，系统将使用本地存储的数据继续工作');
+    });
+
+    // 从本地存储加载数据
+    function loadFromLocalStorage() {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if (data) {
+          const parsedData = JSON.parse(data);
+          inventoryData = parsedData.inventory || [];
+          productImages = parsedData.images || {};
+          lastSyncTime = parsedData.lastSync || null;
+          console.log('数据已从本地存储加载');
+          updateSyncStatus('本地数据已加载', 'success');
+          return true;
+        }
+      } catch (error) {
+        console.error('从本地存储加载数据失败:', error);
+        updateSyncStatus('加载失败', 'error');
+      }
+      return false;
+    }
+
+    // 检查localStorage是否可用
+    function isLocalStorageAvailable() {
+      try {
+        const test = '__localStorage_test__';
+        localStorage.setItem(test, test);
+        localStorage.removeItem(test);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    // 保存到本地存储
+    function saveToLocalStorage() {
+      // 首先检查localStorage是否可用
+      if (!isLocalStorageAvailable()) {
+        console.error('localStorage不可用，可能是隐私模式或被禁用');
+        updateSyncStatus('本地存储不可用', 'error');
+        alert('本地存储功能不可用，可能是因为浏览器隐私模式。请退出隐私模式或启用本地存储。');
+        return;
+      }
+
+      try {
+        const dataToSave = {
+          inventory: inventoryData,
+          images: productImages,
+          lastSync: lastSyncTime,
+          savedAt: new Date().toISOString()
+        };
+        
+        // 检查数据大小
+        const dataString = JSON.stringify(dataToSave);
+        const dataSize = new Blob([dataString]).size;
+        console.log(`准备保存数据，大小: ${(dataSize / 1024 / 1024).toFixed(2)} MB`);
+        
+        // 尝试保存到localStorage
+        localStorage.setItem(STORAGE_KEY, dataString);
+        console.log('数据已成功保存到本地存储');
+        updateSyncStatus('本地已保存', 'success');
+        
+      } catch (error) {
+        console.error('保存到本地存储失败:', error);
+        
+        // 处理不同类型的错误
+        if (error.name === 'QuotaExceededError' || error.code === 22) {
+          // localStorage配额超出
+          console.warn('localStorage配额已满，尝试清理旧数据...');
+          try {
+            // 清理可能的旧数据
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key !== STORAGE_KEY && key.includes('inventory')) {
+                keysToRemove.push(key);
+              }
+            }
+            
+            // 删除旧的相关数据
+            keysToRemove.forEach(key => localStorage.removeItem(key));
+            
+            // 再次尝试保存
+            const dataToSave = {
+              inventory: inventoryData,
+              images: productImages,
+              lastSync: lastSyncTime,
+              savedAt: new Date().toISOString()
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+            console.log('清理后数据保存成功');
+            updateSyncStatus('本地已保存（已清理）', 'success');
+            
+          } catch (retryError) {
+            console.error('清理后仍无法保存:', retryError);
+            updateSyncStatus('存储空间不足', 'error');
+            alert('本地存储空间不足，请清理浏览器数据或使用云端同步功能。');
+          }
+        } else {
+          // 其他错误
+          console.error('保存失败，错误类型:', error.name, error.message);
+          updateSyncStatus('保存失败', 'error');
+        }
+      }
+    }
+
+    // Supabase数据库操作函数
+    async function saveToSupabase() {
+      if (!supabase) {
+        console.log('Supabase未配置，跳过云端保存');
+        return false;
+      }
+      
+      try {
+        // 保存库存数据
+        const { data, error } = await supabase
+          .from('inventory_data')
+          .upsert({
+            id: 1,
+            data: inventoryData,
+            images: productImages,
+            updated_at: new Date().toISOString()
+          });
+          
+        if (error) throw error;
+        
+        lastSyncTime = new Date().toISOString();
+        console.log('数据已保存到云端');
+        return true;
+      } catch (error) {
+        console.log('云端保存失败，仅使用本地存储:', error.message);
+        return false;
+      }
+    }
+    
+    async function loadFromSupabase() {
+      if (!supabase) {
+        console.log('Supabase未配置，跳过云端加载');
+        return false;
+      }
+      
+      try {
+        const { data, error } = await supabase
+          .from('inventory_data')
+          .select('*')
+          .eq('id', 1)
+          .single();
+          
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          throw error;
+        }
+        
+        if (data) {
+          inventoryData = data.data || [];
+          productImages = data.images || {};
+          lastSyncTime = data.updated_at;
+          console.log('从云端加载数据成功');
+          return true;
+        }
+        
+        return false;
+      } catch (error) {
+        console.log('云端加载失败，使用本地数据:', error.message);
+        return false;
+      }
+    }
+
+    // 云端同步功能（使用Supabase）
+    async function syncWithCloud() {
+      if (!isOnline) {
+        updateSyncStatus('离线模式，无法同步', 'warning');
+        return;
+      }
+      
+      if (!supabase) {
+        updateSyncStatus('数据库未连接', 'error');
+        return;
+      }
+
+      updateSyncStatus('正在同步...', 'syncing');
+      
+      try {
+        // 确保有本地数据可以同步
+        if (inventoryData.length === 0) {
+          // 如果本地没有数据，先尝试从云端加载
+          const loadSuccess = await loadFromSupabase();
+          if (loadSuccess) {
+            updateAllTables();
+            updateStatistics();
+            saveToLocalStorage();
+            updateSyncStatus('从云端恢复数据成功', 'success');
+            return;
+          } else {
+            updateSyncStatus('没有数据可同步', 'warning');
+            return;
+          }
+        }
+        
+        // 保存本地数据到云端
+        const saveSuccess = await saveToSupabase();
+        
+        if (saveSuccess) {
+          updateSyncStatus('同步成功', 'success');
+          console.log('本地数据已成功同步到云端');
+        } else {
+          updateSyncStatus('同步失败，数据仍保存在本地', 'warning');
+        }
+        
+      } catch (error) {
+        console.error('云端同步失败:', error);
+        updateSyncStatus('同步失败，使用本地数据', 'error');
+        
+        // 确保在同步失败时，数据仍然可用
+        if (inventoryData.length === 0) {
+          loadFromLocalStorage();
+        }
+      }
+    }
+
+    // 更新同步状态显示
+    function updateSyncStatus(message, type) {
+      const statusElement = document.getElementById('syncStatus');
+      const indicatorElement = document.getElementById('syncIndicator');
+      
+      if (statusElement) {
+        statusElement.textContent = message;
+        statusElement.className = `text-sm ${
+          type === 'success' ? 'text-green-600' :
+          type === 'error' ? 'text-red-600' :
+          type === 'warning' ? 'text-yellow-600' :
+          type === 'syncing' ? 'text-blue-600' :
+          'text-gray-600'
+        }`;
+      }
+      
+      if (indicatorElement) {
+        // 移除所有状态类
+        indicatorElement.className = 'w-2 h-2 rounded-full';
+        
+        switch (type) {
+          case 'success':
+            indicatorElement.classList.add('bg-green-500');
+            break;
+          case 'error':
+            indicatorElement.classList.add('bg-red-500');
+            // 同步失败时，确保使用本地数据
+            console.log('云端同步失败，使用本地数据');
+            break;
+          case 'warning':
+            indicatorElement.classList.add('bg-yellow-500');
+            break;
+          case 'syncing':
+            indicatorElement.classList.add('bg-blue-500', 'animate-pulse');
+            break;
+          default:
+            indicatorElement.classList.add('bg-gray-400');
+        }
+      }
+    }
+
+    // 自动保存功能
+    function startAutoSave() {
+      if (autoSaveInterval) {
+        clearInterval(autoSaveInterval);
+      }
+      
+      autoSaveInterval = setInterval(() => {
+        saveToLocalStorage();
+        if (isOnline) {
+          syncWithCloud();
+        }
+      }, 30000); // 每30秒自动保存
+    }
+
+    // 导出备份数据
+    function exportBackup() {
+      try {
+        const backupData = {
+          inventory: inventoryData,
+          images: productImages,
+          exportTime: new Date().toISOString(),
+          version: '1.0'
+        };
+        
+        const dataStr = JSON.stringify(backupData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(dataBlob);
+        link.download = `inventory_backup_${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        
+        updateSyncStatus('备份已导出', 'success');
+      } catch (error) {
+        console.error('导出备份失败:', error);
+        updateSyncStatus('导出失败', 'error');
+      }
+    }
+
+    // 导入备份数据
+    function importBackup(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const backupData = JSON.parse(e.target.result);
+          
+          if (backupData.inventory && Array.isArray(backupData.inventory)) {
+            inventoryData = backupData.inventory;
+            productImages = backupData.images || {};
+            
+            saveToLocalStorage();
+            updateAllTables();
+            updateStatistics();
+            
+            updateSyncStatus('备份已导入', 'success');
+            alert('备份数据导入成功！');
+          } else {
+            throw new Error('无效的备份文件格式');
+          }
+        } catch (error) {
+          console.error('导入备份失败:', error);
+          updateSyncStatus('导入失败', 'error');
+          alert('备份文件格式错误或损坏！');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // 清除所有数据
+    function clearAllData() {
+      if (confirm('确定要清除所有数据吗？此操作不可恢复！')) {
+        localStorage.removeItem(STORAGE_KEY);
+        inventoryData = [];
+        productImages = {};
+        lastSyncTime = null;
+        
+        updateAllTables();
+        updateStatistics();
+        updateSyncStatus('数据已清除', 'warning');
+        alert('所有数据已清除！');
+      }
+    }
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', async function() {
+      // 初始化Supabase
+      const supabaseInitialized = await initSupabase();
+      
+      // 尝试从云端加载数据
+      let hasCloudData = false;
+      if (supabaseInitialized && isOnline) {
+        updateSyncStatus('正在加载云端数据...', 'syncing');
+        hasCloudData = await loadFromSupabase();
+      }
+      
+      // 如果云端没有数据，尝试从本地存储加载
+      let hasLocalData = false;
+      if (!hasCloudData) {
+        hasLocalData = loadFromLocalStorage();
+      }
+      
+      // 如果既没有云端数据也没有本地数据，使用示例数据
+      if (!hasCloudData && !hasLocalData) {
+        inventoryData = [
+        {
+          'Apelido Produto': '示例产品A',
+          '库存箱数': 15,
+          '进货箱数': 20,
+          '已售箱数': 5,
+          '出售数量': 50,
+          'Preco': 25.50,
+          '(=) Saldo Final': 150,
+          '类别': '电子产品',
+          'Vendas 7 dias': 10,
+          'Vendas 30 dias': 500
+        },
+        {
+          'Apelido Produto': '示例产品B',
+          '库存箱数': 2,
+          '进货箱数': 10,
+          '已售箱数': 8,
+          '出售数量': 80,
+          'Preco': 15.00,
+          '(=) Saldo Final': 30,
+          '类别': '家居用品',
+          'Vendas 7 dias': 15,
+          'Vendas 30 dias': 700
+        },
+        {
+          'Apelido Produto': '低库存产品C',
+          '库存箱数': 1,
+          '进货箱数': 5,
+          '已售箱数': 4,
+          '出售数量': 40,
+          'Preco': 8.99,
+          '(=) Saldo Final': 10,
+          '类别': '食品',
+          'Vendas 7 dias': 8,
+          'Vendas 30 dias': 320
+        },
+        {
+          'Apelido Produto': 'MRES-B139',
+          '库存箱数': 2,
+          '进货箱数': 15,
+          '已售箱数': 13,
+          '出售数量': 130,
+          'Preco': 18.50,
+          '(=) Saldo Final': 37,
+          '类别': '电子产品',
+          'Vendas 7 dias': 5,
+          'Vendas 30 dias': 260
+        },
+        {
+          'Apelido Produto': '急需补货D',
+          '库存箱数': 0,
+          '进货箱数': 8,
+          '已售箱数': 8,
+          '出售数量': 80,
+          'Preco': 12.75,
+          '(=) Saldo Final': 0,
+          '类别': '日用品',
+          'Vendas 7 dias': 12,
+          'Vendas 30 dias': 480
+        }
+      ];
+        // 保存示例数据到本地存储
+        saveToLocalStorage();
+      }
+      
+      updateAllTables();
+      updateStatistics();
+      
+      // 更新同步状态
+      if (hasCloudData) {
+        updateSyncStatus('已加载云端数据', 'success');
+      } else if (hasLocalData) {
+        updateSyncStatus('使用本地数据', 'warning');
+      } else {
+        updateSyncStatus('使用示例数据', 'warning');
+      }
+      
+      // 启动自动保存
+      startAutoSave();
+      
+      // 如果在线且Supabase已初始化，启动定期同步
+      if (isOnline && supabaseInitialized) {
+        // 立即进行一次同步（如果还没有云端数据）
+        if (!hasCloudData) {
+          setTimeout(() => syncWithCloud(), 2000);
+        }
+      }
+    });
+    
+    // PDF图片处理功能
+    let productImages = {}; // 存储产品型号与图片的映射关系
+    
+    // 处理文件上传（PDF或图片文件夹）
+    async function handlePDFAndImageUpload(event) {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+      
+      const statusElement = document.getElementById('pdfStatus');
+      
+      // 检查是否为PDF文件
+      if (files.length === 1 && files[0].type === 'application/pdf') {
+        await handlePDFUpload(event);
+        return;
+      }
+      
+      // 处理图片文件夹
+      if (statusElement) {
+        statusElement.textContent = '正在处理图片文件...';
+        statusElement.className = 'text-sm text-blue-600';
+      }
+      
+      try {
+        productImages = {}; // 清空之前的图片映射
+        let processedCount = 0;
+        
+        for (const file of files) {
+          if (file.type.startsWith('image/')) {
+            const imageDataUrl = await fileToDataURL(file);
+            const fileName = file.name.split('.')[0]; // 去掉扩展名
+            
+            // 尝试从文件名中提取产品型号
+            const productModel = extractProductModelFromFileName(fileName);
+            if (productModel) {
+              productImages[productModel] = imageDataUrl;
+              processedCount++;
+              console.log(`图片 ${file.name} 已匹配到产品: ${productModel}`);
+            } else {
+              console.log(`图片 ${file.name} 未找到匹配的产品名称`);
+            }
+          }
+        }
+        
+        if (statusElement) {
+          statusElement.textContent = `已处理图片文件夹，提取了 ${processedCount} 个产品图片`;
+          statusElement.className = 'text-sm text-green-600';
+        }
+        
+        // 更新表格显示
+        updateAllTables();
+        
+      } catch (error) {
+        console.error('图片处理错误:', error);
+        if (statusElement) {
+          statusElement.textContent = '图片处理失败';
+          statusElement.className = 'text-sm text-red-600';
+        }
+      }
+    }
+    
+    // 将文件转换为DataURL
+    function fileToDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    
+    // 从文件名中提取产品型号
+    function extractProductModelFromFileName(fileName) {
+      // 首先尝试精确匹配：文件名与产品名称完全一致
+      for (const item of inventoryData) {
+        const productName = item['Apelido Produto'] || '';
+        if (productName && fileName === productName) {
+          return productName;
+        }
+      }
+      
+      // 如果没有精确匹配，尝试包含匹配
+      for (const item of inventoryData) {
+        const productName = item['Apelido Produto'] || '';
+        if (productName && fileName.includes(productName)) {
+          return productName;
+        }
+      }
+      
+      // 反向匹配：产品名称包含文件名
+      for (const item of inventoryData) {
+        const productName = item['Apelido Produto'] || '';
+        if (productName && productName.includes(fileName)) {
+          return productName;
+        }
+      }
+      
+      // 如果没有匹配到，返回null（不处理此图片）
+      return null;
+    }
+    
+    // 处理PDF上传
+    async function handlePDFUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const statusElement = document.getElementById('pdfStatus');
+      if (statusElement) {
+        statusElement.textContent = '正在处理PDF...';
+        statusElement.className = 'text-sm text-blue-600';
+      }
+      
+      try {
+        // 使用PDF.js处理PDF文件
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+        
+        productImages = {}; // 清空之前的图片映射
+        
+        // 遍历PDF的每一页
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          
+          // 获取页面文本内容
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          
+          // 渲染页面为图片
+          const viewport = page.getViewport({ scale: 2.0 });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          
+          await page.render({
+            canvasContext: context,
+            viewport: viewport
+          }).promise;
+          
+          const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          // 尝试从页面文本中提取产品型号
+          const productModel = extractProductModel(pageText);
+          if (productModel) {
+            productImages[productModel] = imageDataUrl;
+          }
+        }
+        
+        if (statusElement) {
+          statusElement.textContent = `已处理PDF，提取了 ${Object.keys(productImages).length} 个产品图片`;
+          statusElement.className = 'text-sm text-green-600';
+        }
+        
+        // 更新表格显示
+        updateAllTables();
+        
+      } catch (error) {
+        console.error('PDF处理错误:', error);
+        if (statusElement) {
+          statusElement.textContent = 'PDF处理失败';
+          statusElement.className = 'text-sm text-red-600';
+        }
+      }
+    }
+    
+    // 从文本中提取产品型号
+    function extractProductModel(text) {
+      // 查找与现有产品数据匹配的型号
+      for (const item of inventoryData) {
+        const productName = item['Apelido Produto'] || '';
+        if (productName && text.includes(productName)) {
+          return productName;
+        }
+      }
+      
+      // 如果没有直接匹配，尝试提取常见的产品型号格式
+      const modelPatterns = [
+        /[A-Z]{2,4}-[A-Z0-9]{3,6}/g, // 如: MRES-B139
+        /[A-Z]{3,}\d{2,}/g,          // 如: ABC123
+        /\b[A-Z0-9]{4,10}\b/g        // 通用字母数字组合
+      ];
+      
+      for (const pattern of modelPatterns) {
+        const matches = text.match(pattern);
+        if (matches) {
+          // 返回第一个匹配的型号
+          return matches[0];
+        }
+      }
+      
+      return null;
+    }
+    
+    // 获取产品图片
+    function getProductImage(productName) {
+      // 直接匹配
+      if (productImages[productName]) {
+        return productImages[productName];
+      }
+      
+      // 模糊匹配
+      for (const [model, image] of Object.entries(productImages)) {
+        if (productName.includes(model) || model.includes(productName)) {
+          return image;
+        }
+      }
+      
+      return null;
+    }
+    
+    // 显示图片模态框
+    function showImageModal(imageSrc, productName) {
+      // 创建模态框
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+      modal.onclick = () => document.body.removeChild(modal);
+      
+      const modalContent = document.createElement('div');
+      modalContent.className = 'bg-white rounded-lg p-6 max-w-4xl max-h-full overflow-auto';
+      modalContent.onclick = (e) => e.stopPropagation();
+      
+      modalContent.innerHTML = `
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-semibold text-gray-800">${productName}</h3>
+          <button onclick="document.body.removeChild(this.closest('.fixed'))" class="text-gray-500 hover:text-gray-700">
+            <i class="fa fa-times text-xl"></i>
+          </button>
+        </div>
+        <div class="relative inline-block cursor-pointer" onclick="openFullscreenImage(this.querySelector('img'))">
+          <img src="${imageSrc}" alt="${productName}" class="max-w-full max-h-96 object-contain mx-auto transition-transform duration-200 hover:scale-105">
+        </div>
+      `;
+      
+      modal.appendChild(modalContent);
+      document.body.appendChild(modal);
+    }
+
+    // 全屏显示图片
+    function openFullscreenImage(img) {
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center cursor-zoom-out';
+      
+      const fullImg = document.createElement('img');
+      fullImg.src = img.src;
+      fullImg.alt = img.alt;
+      fullImg.className = 'max-w-[90vw] max-h-[90vh] object-contain';
+      
+      overlay.appendChild(fullImg);
+      overlay.onclick = () => document.body.removeChild(overlay);
+      document.body.appendChild(overlay);
+    }
+    
+    // 手动同步函数
+    function manualSync() {
+      if (!isOnline) {
+        alert('当前离线，系统将继续使用本地数据');
+        updateSyncStatus('离线模式，使用本地数据', 'warning');
+        return;
+      }
+      
+      const syncBtn = document.getElementById('syncBtn');
+      const originalText = syncBtn.innerHTML;
+      
+      syncBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i>同步中...';
+      syncBtn.disabled = true;
+      
+      updateSyncStatus('正在手动同步...', 'syncing');
+      
+      syncWithCloud().finally(() => {
+        syncBtn.innerHTML = originalText;
+        syncBtn.disabled = false;
+      });
+    }
+    
+    // 从云端加载数据函数
+    async function loadFromCloud() {
+      if (!isOnline) {
+        alert('当前离线，无法从云端加载数据');
+        updateSyncStatus('离线模式，使用本地数据', 'warning');
+        return;
+      }
+      
+      if (!supabase) {
+        alert('数据库未连接，无法从云端加载数据');
+        updateSyncStatus('数据库未连接', 'error');
+        return;
+      }
+      
+      // 确认是否要从云端加载数据
+      if (!confirm('确定要从云端加载数据吗？这将覆盖当前的本地数据。\n\n建议在加载前先进行数据备份。')) {
+        return;
+      }
+      
+      const loadBtn = document.getElementById('loadBtn');
+      const originalText = loadBtn.innerHTML;
+      
+      loadBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i>加载中...';
+      loadBtn.disabled = true;
+      
+      updateSyncStatus('正在从云端加载数据...', 'syncing');
+      
+      try {
+        const loadSuccess = await loadFromSupabase();
+        
+        if (loadSuccess) {
+          // 更新界面
+          updateAllTables();
+          updateStatistics();
+          saveToLocalStorage(); // 同时保存到本地
+          updateSyncStatus('从云端加载数据成功', 'success');
+          alert('数据已从云端成功加载！');
+        } else {
+          updateSyncStatus('云端没有数据', 'warning');
+          alert('云端没有找到数据，请先进行同步操作。');
+        }
+      } catch (error) {
+        console.error('从云端加载数据失败:', error);
+        updateSyncStatus('从云端加载失败', 'error');
+        alert('从云端加载数据失败，请检查网络连接和数据库配置。');
+      } finally {
+        loadBtn.innerHTML = originalText;
+        loadBtn.disabled = false;
+      }
+    }
+    
+    // 打开恢复模态框
+    function openRestoreModal() {
+      document.getElementById('restoreModal').classList.remove('hidden');
+    }
+    
+    // 关闭恢复模态框
+    function closeRestoreModal() {
+      document.getElementById('restoreModal').classList.add('hidden');
+      document.getElementById('restoreFileInput').value = '';
+    }
+    
+    // 处理恢复文件选择
+    function handleRestoreFile(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          try {
+            const backupData = JSON.parse(e.target.result);
+            if (confirm('确定要恢复数据吗？这将覆盖当前所有数据。')) {
+              importBackup(backupData);
+            }
+          } catch (error) {
+            alert('备份文件格式错误，请选择有效的备份文件。');
+          }
+        };
+        reader.readAsText(file);
+      }
+    }
+    
+    // 确认清除数据
+    function confirmClearData() {
+      if (confirm('确定要清除所有数据吗？此操作不可撤销。\n\n建议在清除前先进行数据备份。')) {
+        if (confirm('再次确认：这将删除所有库存数据，确定继续吗？')) {
+          clearAllData();
+        }
+      }
+    }
+    
+    // 建议筛选功能
+    let suggestionFilterOpen = false;
+    let currentSuggestionFilter = '';
+    
+    function toggleSuggestionFilter() {
+      const icon = document.getElementById('suggestionFilterIcon');
+      
+      if (!suggestionFilterOpen) {
+        // 创建下拉筛选菜单
+        const filterMenu = document.createElement('div');
+        filterMenu.id = 'suggestionFilterMenu';
+        filterMenu.className = 'absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-32';
+        filterMenu.innerHTML = `
+          <div class="p-2">
+            <div class="cursor-pointer px-3 py-2 text-sm text-black hover:bg-gray-100 rounded" onclick="filterSuggestions('')">全部</div>
+             <div class="cursor-pointer px-3 py-2 text-sm text-black hover:bg-gray-100 rounded" onclick="filterSuggestions('紧急补货')">紧急补货</div>
+             <div class="cursor-pointer px-3 py-2 text-sm text-black hover:bg-gray-100 rounded" onclick="filterSuggestions('建议补货')">建议补货</div>
+             <div class="cursor-pointer px-3 py-2 text-sm text-black hover:bg-gray-100 rounded" onclick="filterSuggestions('库存正常')">库存正常</div>
+             <div class="cursor-pointer px-3 py-2 text-sm text-black hover:bg-gray-100 rounded" onclick="filterSuggestions('库存过多')">库存过多</div>
+          </div>
+        `;
+        
+        // 获取表头元素并设置相对定位
+        const thElement = icon.closest('th');
+        thElement.style.position = 'relative';
+        thElement.appendChild(filterMenu);
+        
+        // 旋转箭头
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+        
+        suggestionFilterOpen = true;
+        
+        // 点击外部关闭菜单
+        setTimeout(() => {
+          document.addEventListener('click', closeSuggestionFilter);
+        }, 100);
+      } else {
+        closeSuggestionFilter();
+      }
+    }
+    
+    function closeSuggestionFilter() {
+      const filterMenu = document.getElementById('suggestionFilterMenu');
+      const icon = document.getElementById('suggestionFilterIcon');
+      
+      if (filterMenu) {
+        filterMenu.remove();
+      }
+      
+      if (icon) {
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+      }
+      
+      suggestionFilterOpen = false;
+      document.removeEventListener('click', closeSuggestionFilter);
+    }
+    
+    function filterSuggestions(filterValue) {
+      currentSuggestionFilter = filterValue;
+      const tbody = document.getElementById('suggestionsTableBody');
+      const rows = tbody.querySelectorAll('tr');
+      
+      rows.forEach(row => {
+        const suggestionCell = row.querySelector('td:last-child span');
+        if (suggestionCell) {
+          const suggestionText = suggestionCell.textContent.trim();
+          if (!filterValue || suggestionText === filterValue) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        }
+      });
+      
+      closeSuggestionFilter();
+    }
+  </script>
+  
+  <!-- 数据恢复模态框 -->
+  <div id="restoreModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-96">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">恢复数据</h3>
+      <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+        <i class="fa fa-upload text-4xl text-gray-400 mb-4"></i>
+        <p class="text-gray-600 mb-4">选择备份文件进行数据恢复</p>
+        <input type="file" id="restoreFileInput" accept=".json" class="hidden" onchange="handleRestoreFile(event)">
+        <button onclick="document.getElementById('restoreFileInput').click()" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
+          选择备份文件
+        </button>
+      </div>
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-4">
+        <div class="flex items-start">
+          <i class="fa fa-exclamation-triangle text-yellow-600 mr-2 mt-0.5"></i>
+          <div class="text-sm text-yellow-800">
+            <p class="font-medium mb-1">注意事项：</p>
+            <ul class="list-disc list-inside space-y-1">
+              <li>恢复操作将覆盖当前所有数据</li>
+              <li>建议在恢复前先备份当前数据</li>
+              <li>只能恢复本系统导出的备份文件</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-3 mt-6">
+        <button onclick="closeRestoreModal()" class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
+          取消
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 添加PDF.js库 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    // 配置PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+</body>
+</html>
