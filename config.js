@@ -1,24 +1,59 @@
-// Supabase配置文件
-// 请将以下配置替换为您的实际Supabase项目配置
-
-// 1. 访问 https://supabase.com 创建新项目
-// 2. 在项目设置 > API 中找到以下信息
-// 3. 将下面的占位符替换为实际值
-
-const SUPABASE_CONFIG = {
+// Supabase配置
+// 请在部署前替换为您的实际Supabase项目配置
+const defaultSupabaseConfig = {
   url: 'https://wbkamcvugvyhgiaxidqb.supabase.co',
   anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6India2FtY3Z1Z3Z5aGdpYXhpZHFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwODg1NDUsImV4cCI6MjA2OTY2NDU0NX0.pmGQOCtbfQjAjDV9ZsqV2a7ver8oovDmo8GP9meOxLA'
-}
+};
 
-// 注意：以上是示例配置，请替换为您的真实Supabase项目配置
-// 如果您还没有Supabase项目，系统将仅使用本地存储功能
+const storedSupabaseUrl = localStorage.getItem('CLOUD_SUPABASE_URL');
+const storedSupabaseAnonKey = localStorage.getItem('CLOUD_SUPABASE_ANON_KEY');
 
-// 导出配置（如果使用模块系统）
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = SUPABASE_CONFIG;
-}
+window.SUPABASE_CONFIG = {
+  url: storedSupabaseUrl || defaultSupabaseConfig.url,
+  anonKey: storedSupabaseAnonKey || defaultSupabaseConfig.anonKey
+};
 
-// 全局变量（用于直接在HTML中引用）
-if (typeof window !== 'undefined') {
-  window.SUPABASE_CONFIG = SUPABASE_CONFIG;
-}
+window.CLOUD_CONFIG = {
+  provider: localStorage.getItem('CLOUD_PROVIDER') || 'supabase'
+};
+
+window.setSupabaseConfig = function (url, anonKey) {
+  if (typeof url === 'string' && url.trim()) {
+    localStorage.setItem('CLOUD_SUPABASE_URL', url.trim());
+  }
+  if (typeof anonKey === 'string' && anonKey.trim()) {
+    localStorage.setItem('CLOUD_SUPABASE_ANON_KEY', anonKey.trim());
+  }
+  localStorage.setItem('CLOUD_PROVIDER', 'supabase');
+  window.location.reload();
+};
+
+window.disableCloudSync = function () {
+  localStorage.setItem('CLOUD_PROVIDER', 'none');
+  window.location.reload();
+};
+
+window.enableNeonSync = function (syncToken) {
+  if (typeof syncToken === 'string' && syncToken.trim()) {
+    localStorage.setItem('CLOUD_SYNC_TOKEN', syncToken.trim());
+  }
+  localStorage.setItem('CLOUD_PROVIDER', 'neon');
+  window.location.reload();
+};
+
+window.clearCloudConfig = function () {
+  localStorage.removeItem('CLOUD_SUPABASE_URL');
+  localStorage.removeItem('CLOUD_SUPABASE_ANON_KEY');
+  localStorage.removeItem('CLOUD_PROVIDER');
+  localStorage.removeItem('CLOUD_SYNC_TOKEN');
+  window.location.reload();
+};
+
+// 如果您使用环境变量（推荐用于生产环境），可以这样配置：
+// window.SUPABASE_CONFIG = {
+//   url: process.env.REACT_APP_SUPABASE_URL || 'https://your-project-ref.supabase.co',
+//   anonKey: process.env.REACT_APP_SUPABASE_ANON_KEY || 'your-anon-key-here'
+// };
+
+// 注意：在生产环境中，建议使用环境变量来存储敏感信息
+// 在Netlify中，您可以在站点设置的Environment variables中设置这些值
