@@ -989,7 +989,7 @@
     // Supabase配置 - 从config.js中获取
     let SUPABASE_URL = null;
     let SUPABASE_ANON_KEY = null;
-    let supabase = null;
+    let supabaseClient = null;
     let CLOUD_PROVIDER = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'supabase';
 
     function getCloudSyncToken() {
@@ -1069,14 +1069,14 @@
       try {
         CLOUD_PROVIDER = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'supabase';
         if (CLOUD_PROVIDER === 'none') {
-          supabase = null;
+          supabaseClient = null;
           setCloudButtonsVisible(false);
           updateSyncStatus('本地存储模式', 'warning');
           return false;
         }
 
         if (CLOUD_PROVIDER === 'neon') {
-          supabase = null;
+          supabaseClient = null;
           setCloudButtonsVisible(true);
           try {
             await fetch('/.netlify/functions/inventory_load', { headers: { ...getCloudHeaders() } });
@@ -1119,7 +1119,7 @@
         }
         
         // 创建Supabase客户端
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         console.log('Supabase客户端初始化成功');
         setCloudButtonsVisible(true);
         
@@ -1145,7 +1145,7 @@
     async function testSupabaseConnection() {
       try {
         // 尝试查询表，测试连接
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
           .from('inventory_data')
           .select('id')
           .limit(1);
@@ -2608,14 +2608,14 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
 
     // Supabase数据库操作函数
     async function saveToSupabase() {
-      if (!supabase) {
+      if (!supabaseClient) {
         console.log('Supabase未配置，跳过云端保存');
         return false;
       }
       
       try {
         // 首先检查是否已存在数据
-        const { data: existingData, error: selectError } = await supabase
+        const { data: existingData, error: selectError } = await supabaseClient
           .from('inventory_data')
           .select('id')
           .limit(1);
@@ -2641,7 +2641,7 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
         
         if (existingData && existingData.length > 0) {
           // 如果存在数据，使用update
-          const { data, error } = await supabase
+          const { data, error } = await supabaseClient
             .from('inventory_data')
             .update({
               data: dataToSave.data,
@@ -2652,7 +2652,7 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
           if (error) throw error;
         } else {
           // 如果不存在数据，使用insert（不指定id，让数据库自动生成）
-          const { data, error } = await supabase
+          const { data, error } = await supabaseClient
             .from('inventory_data')
             .insert(dataToSave);
             
@@ -2670,14 +2670,14 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
     }
     
     async function loadFromSupabase() {
-      if (!supabase) {
+      if (!supabaseClient) {
         console.log('Supabase未配置，跳过云端加载');
         return false;
       }
       
       try {
         // 获取最新的数据记录（按创建时间排序）
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
           .from('inventory_data')
           .select('*')
           .order('created_at', { ascending: false })
@@ -2727,7 +2727,7 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
       }
       
       const isNeon = CLOUD_PROVIDER === 'neon';
-      if (!isNeon && !supabase) {
+      if (!isNeon && !supabaseClient) {
         updateSyncStatus('数据库未连接', 'error');
         return;
       }
@@ -3347,7 +3347,7 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
       }
       
       const isNeon = CLOUD_PROVIDER === 'neon';
-      if (!isNeon && !supabase) {
+      if (!isNeon && !supabaseClient) {
         alert('数据库未连接，无法从云端加载数据');
         updateSyncStatus('数据库未连接', 'error');
         return;
@@ -4131,7 +4131,7 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
     
     // 优化的同步数据函数
     async function syncData() {
-      if (!supabase) {
+      if (!supabaseClient) {
         console.log('Supabase未初始化，跳过自动同步');
         return;
       }
@@ -4191,7 +4191,7 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
         let hasMore = true;
         
         while (hasMore) {
-          const { data: batchData, error } = await supabase
+          const { data: batchData, error } = await supabaseClient
             .from('inventory_data')
             .select('*')
             .range(offset, offset + batchSize - 1)
@@ -4254,7 +4254,7 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
       try {
         console.log('开始降级同步...');
         
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
           .from('inventory_data')
           .select('*')
           .order('created_at', { ascending: false })
