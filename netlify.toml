@@ -3,7 +3,7 @@
   publish = "."
   
   # 构建命令（对于静态HTML项目，通常不需要构建命令）
-  command = ""
+  command = "npm install"
 
 [build.environment]
   # Node.js版本
