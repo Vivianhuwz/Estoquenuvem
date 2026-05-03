@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>库存管理系统</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <!-- Google字体已移除以避免ORB错误，使用系统字体 -->
@@ -17,7 +17,7 @@
   <!-- 添加Supabase客户端 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- 添加Supabase配置 -->
-  <script src="./config.js?v=1.1"></script>
+  <script src="/config.js?v=1.1"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -990,7 +990,11 @@
     let SUPABASE_URL = null;
     let SUPABASE_ANON_KEY = null;
     let supabaseClient = null;
-    let CLOUD_PROVIDER = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'supabase';
+    let CLOUD_PROVIDER = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'neon';
+    if (CLOUD_PROVIDER === 'supabase') {
+      CLOUD_PROVIDER = 'neon';
+      localStorage.setItem('CLOUD_PROVIDER', 'neon');
+    }
 
     function getCloudSyncToken() {
       return localStorage.getItem('CLOUD_SYNC_TOKEN') || '';
@@ -1017,6 +1021,12 @@
           ...getCloudHeaders()
         }
       });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const err = new Error(`云端接口未部署或被重定向（/\\.netlify/functions/inventory_load 返回的不是 JSON）。HTTP ${response.status}`);
+        err.code = 'FUNCTION_NOT_READY';
+        throw err;
+      }
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         const errorCode = payload && payload.error ? payload.error : 'REQUEST_FAILED';
@@ -1047,6 +1057,12 @@
         },
         body: JSON.stringify({ data: inventoryData })
       });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const err = new Error(`云端接口未部署或被重定向（/\\.netlify/functions/inventory_save 返回的不是 JSON）。HTTP ${response.status}`);
+        err.code = 'FUNCTION_NOT_READY';
+        throw err;
+      }
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         const errorCode = payload && payload.error ? payload.error : 'REQUEST_FAILED';
@@ -1064,10 +1080,14 @@
       return true;
     }
     
-    // 初始化Supabase客户端
+    // 初始化云端客户端（仅支持 Neon / 本地）
     async function initSupabase() {
       try {
-        CLOUD_PROVIDER = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'supabase';
+        CLOUD_PROVIDER = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'neon';
+        if (CLOUD_PROVIDER === 'supabase') {
+          CLOUD_PROVIDER = 'neon';
+          localStorage.setItem('CLOUD_PROVIDER', 'neon');
+        }
         if (CLOUD_PROVIDER === 'none') {
           supabaseClient = null;
           setCloudButtonsVisible(false);
@@ -1079,60 +1099,21 @@
           supabaseClient = null;
           setCloudButtonsVisible(true);
           try {
-            await fetch('/.netlify/functions/inventory_load', { headers: { ...getCloudHeaders() } });
+            await loadFromNeon();
             updateSyncStatus('Neon 云端模式', 'success');
             return true;
           } catch (error) {
             console.error('Neon云端初始化失败:', error);
             updateSyncStatus('云端连接失败，使用本地存储', 'error');
+            const code = error && error.code ? ` (${error.code})` : '';
+            showNotification(`Neon 连接失败${code}: ${error && error.message ? error.message : error}`, 'error');
             return false;
           }
         }
-
-        // 优先从环境变量获取配置（Netlify环境变量）
-        if (typeof process !== 'undefined' && process.env) {
-          SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
-          SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
-        }
-        
-        // 如果环境变量不存在，从config.js获取配置
-        if ((!SUPABASE_URL || !SUPABASE_ANON_KEY) && window.SUPABASE_CONFIG) {
-          SUPABASE_URL = window.SUPABASE_CONFIG.url;
-          SUPABASE_ANON_KEY = window.SUPABASE_CONFIG.anonKey;
-        }
-        
-        // 检查配置是否有效
-        if (!SUPABASE_URL || !SUPABASE_ANON_KEY || 
-            SUPABASE_URL.includes('your-project-ref') || 
-            SUPABASE_ANON_KEY.includes('your-anon-key')) {
-          console.log('Supabase配置未设置或使用默认值，使用本地存储模式');
-          setCloudButtonsVisible(false);
-          updateSyncStatus('本地存储模式', 'warning');
-          return false;
-        }
-        
-        // 检查Supabase库是否加载
-        if (typeof window.supabase === 'undefined') {
-          console.error('Supabase库未加载');
-          updateSyncStatus('Supabase库加载失败', 'error');
-          return false;
-        }
-        
-        // 创建Supabase客户端
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log('Supabase客户端初始化成功');
-        setCloudButtonsVisible(true);
-        
-        // 测试连接并检查表
-        const connectionTest = await testSupabaseConnection();
-        if (connectionTest) {
-          updateSyncStatus('云端连接成功', 'success');
-          return true;
-        } else {
-          updateSyncStatus('云端连接失败', 'error');
-          return false;
-        }
-        
+        supabaseClient = null;
+        setCloudButtonsVisible(false);
+        updateSyncStatus('本地存储模式', 'warning');
+        return false;
       } catch (error) {
         console.error('Supabase初始化失败:', error);
         setCloudButtonsVisible(false);
@@ -1325,10 +1306,10 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
     window.closeUploadModal = closeUploadModal;
 
     function openCloudSettings() {
-      const current = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'supabase';
+      const current = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'neon';
       const choice = prompt(
-        `选择云端模式：\n1 = 本地（不使用云端）\n2 = Supabase\n3 = Neon\n\n当前：${current}`,
-        current === 'neon' ? '3' : (current === 'none' ? '1' : '2')
+        `选择云端模式：\n1 = 本地（不使用云端）\n2 = Neon\n\n当前：${current}`,
+        current === 'neon' ? '2' : '1'
       );
       if (!choice) return;
 
@@ -1343,22 +1324,6 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
       }
 
       if (choice === '2') {
-        const url = prompt('请输入 Supabase URL（例如：https://xxxx.supabase.co）', (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || '');
-        if (!url) return;
-        const key = prompt('请输入 Supabase anon key（JWT）', (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.anonKey) || '');
-        if (!key) return;
-        if (typeof window.setSupabaseConfig === 'function') {
-          window.setSupabaseConfig(url, key);
-        } else {
-          localStorage.setItem('CLOUD_SUPABASE_URL', url);
-          localStorage.setItem('CLOUD_SUPABASE_ANON_KEY', key);
-          localStorage.setItem('CLOUD_PROVIDER', 'supabase');
-          location.reload();
-        }
-        return;
-      }
-
-      if (choice === '3') {
         const token = prompt('请输入同步 Token（如果你在 Netlify 里设置了 SYNC_TOKEN）', localStorage.getItem('CLOUD_SYNC_TOKEN') || '');
         if (typeof window.enableNeonSync === 'function') {
           window.enableNeonSync(token || '');
@@ -2766,6 +2731,8 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
       } catch (error) {
         console.error('云端同步失败:', error);
         updateSyncStatus('同步失败，使用本地数据', 'error');
+        const code = error && error.code ? ` (${error.code})` : '';
+        showNotification(`同步失败${code}: ${error && error.message ? error.message : error}`, 'error');
         
         // 确保在同步失败时，数据仍然可用
         if (inventoryData.length === 0) {
