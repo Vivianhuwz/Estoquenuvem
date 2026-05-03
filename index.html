@@ -450,6 +450,9 @@
           
           <!-- 存储管理按钮组 -->
           <div class="flex items-center space-x-2 border-l border-gray-300 pl-3">
+            <button onclick="openCloudSettings()" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+              <i class="fa fa-gear mr-1"></i>云端设置
+            </button>
             <!-- 同步状态显示 -->
             <div class="flex items-center space-x-2">
               <span id="syncStatus" class="text-sm text-gray-500">未同步</span>
@@ -565,6 +568,10 @@
           
           <!-- 移动端存储管理功能 -->
           <div class="pt-2 border-t border-gray-200">
+            <button onclick="openCloudSettings(); closeMobileMenu()" class="w-full flex items-center px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50 rounded-lg mb-2">
+              <i class="fa fa-gear mr-3"></i>
+              <span>云端设置</span>
+            </button>
             <!-- 同步状态显示 -->
             <div class="flex items-center justify-between px-4 py-2 mb-2">
               <span class="text-sm text-gray-600">同步状态:</span>
@@ -1316,6 +1323,54 @@ CREATE POLICY "Allow all operations" ON inventory_data FOR ALL USING (true);
     // 将函数暴露到全局作用域
     window.openUploadModal = openUploadModal;
     window.closeUploadModal = closeUploadModal;
+
+    function openCloudSettings() {
+      const current = (window.CLOUD_CONFIG && window.CLOUD_CONFIG.provider) || localStorage.getItem('CLOUD_PROVIDER') || 'supabase';
+      const choice = prompt(
+        `选择云端模式：\n1 = 本地（不使用云端）\n2 = Supabase\n3 = Neon\n\n当前：${current}`,
+        current === 'neon' ? '3' : (current === 'none' ? '1' : '2')
+      );
+      if (!choice) return;
+
+      if (choice === '1') {
+        if (typeof window.disableCloudSync === 'function') {
+          window.disableCloudSync();
+        } else {
+          localStorage.setItem('CLOUD_PROVIDER', 'none');
+          location.reload();
+        }
+        return;
+      }
+
+      if (choice === '2') {
+        const url = prompt('请输入 Supabase URL（例如：https://xxxx.supabase.co）', (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url) || '');
+        if (!url) return;
+        const key = prompt('请输入 Supabase anon key（JWT）', (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.anonKey) || '');
+        if (!key) return;
+        if (typeof window.setSupabaseConfig === 'function') {
+          window.setSupabaseConfig(url, key);
+        } else {
+          localStorage.setItem('CLOUD_SUPABASE_URL', url);
+          localStorage.setItem('CLOUD_SUPABASE_ANON_KEY', key);
+          localStorage.setItem('CLOUD_PROVIDER', 'supabase');
+          location.reload();
+        }
+        return;
+      }
+
+      if (choice === '3') {
+        const token = prompt('请输入同步 Token（如果你在 Netlify 里设置了 SYNC_TOKEN）', localStorage.getItem('CLOUD_SYNC_TOKEN') || '');
+        if (typeof window.enableNeonSync === 'function') {
+          window.enableNeonSync(token || '');
+        } else {
+          if (token) localStorage.setItem('CLOUD_SYNC_TOKEN', token);
+          localStorage.setItem('CLOUD_PROVIDER', 'neon');
+          location.reload();
+        }
+      }
+    }
+
+    window.openCloudSettings = openCloudSettings;
     
     // 处理文件上传
     function handleFileUpload(event) {
